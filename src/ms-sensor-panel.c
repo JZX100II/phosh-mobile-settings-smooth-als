@@ -104,6 +104,8 @@ orientation_string_transform (GBinding     *binding,
 
 static gdouble als_accumulator = 0.0f;
 static gdouble alpha = 0.4f;
+static const char *light_unit = NULL;
+static gboolean already_read_light_unit = FALSE;
 
 static gboolean
 light_level_to_string_transform (GBinding     *binding,
@@ -111,13 +113,17 @@ light_level_to_string_transform (GBinding     *binding,
                                  GValue       *to_value,
                                  gpointer      user_data)
 {
-  MsDBusSensorProxy *proxy = MS_DBUS_SENSOR_PROXY (user_data);
-  const char *light_unit = ms_dbus_sensor_proxy_get_light_level_unit (proxy);
-
   gdouble current_als_value =  g_value_get_double (from_value);
 
-  if (g_strcmp0 (light_unit, "vendor") == 0)
-    light_unit = "%";
+  if(!already_read_light_unit){
+    MsDBusSensorProxy *proxy = MS_DBUS_SENSOR_PROXY (user_data);
+    light_unit = ms_dbus_sensor_proxy_get_light_level_unit (proxy);
+
+    if (g_strcmp0 (light_unit, "vendor") == 0)
+      light_unit = "%";
+    
+    already_read_light_unit = TRUE;
+  }
 
   als_accumulator = (alpha * current_als_value) + (1.0 - alpha) * als_accumulator;
 
