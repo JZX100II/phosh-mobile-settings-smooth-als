@@ -103,9 +103,36 @@ orientation_string_transform (GBinding     *binding,
 }
 
 static gdouble als_accumulator = 0.0f;
-static gdouble alpha = 0.4f;
-static const char *light_unit = NULL;
-static gboolean already_read_light_unit = FALSE;
+static gdouble alpha = 0.5f;
+
+typedef struct {
+  GBinding     *binding,
+  gdouble       from_value,
+  GValue       *to_value,
+  gpointer      user_data
+} LightLevelData;
+
+gboolean light_level_smoothing (gpointer user_data)
+{
+  LightLevelData *data = (LightLevelData *) user_data;
+
+  gdouble current_als_value = data->from_value;
+
+  MsDBusSensorProxy *proxy = MS_DBUS_SENSOR_PROXY (data->user_data);
+  const char* light_unit = ms_dbus_sensor_proxy_get_light_level_unit (proxy); 
+
+  if (g_strcmp0 (light_unit, "vendor") == 0)
+      light_unit = "%";
+
+  als_accumulator = (alpha * current_als_value) + (1.0 - alpha) * als_accumulator;
+
+   g_value_take_string (data->to_value,
+                        g_strdup_printf ("%.1f %s",
+                                         als_accumulator,
+                                         light_unit ?: ""));
+
+  return TRUE;
+}
 
 static gboolean
 light_level_to_string_transform (GBinding     *binding,
@@ -115,22 +142,16 @@ light_level_to_string_transform (GBinding     *binding,
 {
   gdouble current_als_value =  g_value_get_double (from_value);
 
-  if(!already_read_light_unit){
-    MsDBusSensorProxy *proxy = MS_DBUS_SENSOR_PROXY (user_data);
-    light_unit = ms_dbus_sensor_proxy_get_light_level_unit (proxy);
+  LightLevelData *data = g_value (LightLevelData, 1);
 
-    if (g_strcmp0 (light_unit, "vendor") == 0)
-      light_unit = "%";
-    
-    already_read_light_unit = TRUE;
-  }
+  data->binding = binding;
+  data->from_value = g_value_get_string(from_value);
+  g_value_init(data->to_value, G_TYPE_STRING);
+  data->user_data = user_data;
 
-  als_accumulator = (alpha * current_als_value) + (1.0 - alpha) * als_accumulator;
+  g_idle_add (light_level_smoothing, data);
 
-  g_value_take_string (to_value,
-                       g_strdup_printf ("%.1f %s",
-                                        als_accumulator,
-                                        light_unit ?: ""));
+  g_value_take_string (to_value, g_value_get_string (data->to_value));
 
   return TRUE;
 }
