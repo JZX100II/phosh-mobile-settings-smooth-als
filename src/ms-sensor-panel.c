@@ -142,10 +142,11 @@ light_level_to_string_transform (GBinding     *binding,
 {
   gdouble current_als_value =  g_value_get_double (from_value);
 
-  LightLevelData *data = g_value (LightLevelData, 1);
+  LightLevelData *data = g_new (LightLevelData, 1);
 
   data->binding = binding;
   data->from_value = g_value_get_string(from_value);
+  data->to_value = g_new0 (GValue, 1);
   g_value_init(data->to_value, G_TYPE_STRING);
   data->user_data = user_data;
 
